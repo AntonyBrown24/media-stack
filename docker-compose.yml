@@ -1,0 +1,649 @@
+networks:
+  media_net:
+    name: media_net
+    driver: bridge
+  lidify_network:
+    name: lidify_network
+    driver: bridge
+    external: true
+
+volumes:
+  homarr_data:
+    external: true
+  portainer_data:
+  uptime-kuma_data:
+  # Lidify volumes
+  lidify_postgres_data:
+  lidify_backend_cache:
+  lidify_backend_logs:
+  lidify_lidarr_config:
+  lidify_prowlarr_config:
+  lidify_qbittorrent_config:
+
+services:
+  # ===========================
+  # Core Media Server
+  # ===========================
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8096:8096
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./config/jellyfin:/config
+      - ./transcode:/cache
+      - ./media:/media
+
+  # ===========================
+  # Download Clients
+  # ===========================
+  qbittorrent-movies:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent-movies
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8081:8080
+      - 6881:6881
+      - 6881:6881/udp
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - WEBUI_PORT=8080
+    volumes:
+      - ./config/qbittorrent-movies:/config
+      - ./downloads:/downloads
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  qbittorrent-tv:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent-tv
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8082:8080
+      - 6882:6881
+      - 6882:6881/udp
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - WEBUI_PORT=8080
+    volumes:
+      - ./config/qbittorrent-tv:/config
+      - ./downloads/sonarr:/downloads
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  qbittorrent-music:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent-music
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8083:8080
+      - 6883:6881
+      - 6883:6881/udp
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - WEBUI_PORT=8080
+    volumes:
+      - ./config/qbittorrent-music:/config
+      - ./downloads/lidarr:/downloads
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # ===========================
+  # Indexers & Automation
+  # ===========================
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8989:8989
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/sonarr:/config
+      - ./tv:/tv
+      - ./downloads/sonarr:/downloads
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 7878:7878
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/radarr:/config
+      - ./movies:/movies
+      - ./downloads:/downloads
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8686:8686
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/lidarr:/config
+      - ./music:/music
+      - ./downloads/lidarr:/downloads
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 9696:9696
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/prowlarr:/config
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 6767:6767
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/bazarr:/config
+      - ./movies:/movies
+      - ./tv:/tv
+
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:latest
+    container_name: recyclarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    volumes:
+      - ./config/recyclarr/config:/config
+      - ./config/recyclarr/logs:/logs
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 5055:5055
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./config/jellyseerr:/app/config
+
+  # ===========================
+  # Dashboard
+  # ===========================
+  homarr:
+    image: ghcr.io/homarr-labs/homarr:latest
+    container_name: homarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 7575:7575
+    volumes:
+      - ./config/homarr:/app/data/configs
+      - ./config/homarr/icons:/app/public/icons
+      - homarr_data:/appdata
+    environment:
+      - SECRET_ENCRYPTION_KEY=${HOMARR_SECRET_KEY}
+
+  # ===========================
+  # Reverse Proxy
+  # ===========================
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    networks:
+      - media_net
+      - lidify_network
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./config/caddy/pwa:/etc/caddy/pwa:ro
+      - ./config/caddy/data:/data
+      - ./config/caddy/config:/config
+
+  # ===========================
+  # Authentication
+  # ===========================
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 9091:9091
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - ./config/authelia:/config
+
+  # ===========================
+  # Auto‑Updater
+  # ===========================
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    networks:
+      - media_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --cleanup --interval 300
+
+  # ===========================
+  # Dynamic DNS - Cloudflare
+  # ===========================
+  cloudflare-ddns:
+    image: timothyjmiller/cloudflare-ddns:latest
+    container_name: cloudflare-ddns
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - CONFIG_PATH=/config
+      - CF_DDNS_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CF_DDNS_ZONE_ID=${CLOUDFLARE_ZONE_ID}
+      - CF_DDNS_TTL=${DDNS_UPDATE_INTERVAL}
+    volumes:
+      - ./config/cloudflare-ddns:/config
+
+  # ===========================
+  # P2P File Sharing - Soulseek
+  # ===========================
+  soulseek:
+    image: slskd/slskd:latest
+    container_name: soulseek
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 5030:5030  # Web UI
+      - 6358:6358  # P2P protocol
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - ./config/soulseek:/home/user/.local/share/slskd
+      - ./downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5030/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================
+  # Container Management UI
+  # ===========================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 8000:8000
+      - 9000:9000
+    environment:
+      - TZ=Europe/London
+    labels:
+      autoheal.skip: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-m", "5", "http://localhost:9000"]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+
+  # ===========================
+  # Auto-Healer - Restarts unhealthy containers
+  # ===========================
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+      - AUTOHEAL_INTERVAL=5
+      - AUTOHEAL_START_INTERVAL=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "autoheal"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================
+  # Uptime Kuma - Monitoring & Alerts
+  # ===========================
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - 3001:3001
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - uptime-kuma_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "extra/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================
+  # LIDIFY - Music Streaming Platform
+  # ===========================
+  
+  # Lidify Database
+  lidify-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: lidify_db
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      POSTGRES_USER: ${LIDIFY_DB_USER}
+      POSTGRES_PASSWORD: ${LIDIFY_DB_PASSWORD}
+      POSTGRES_DB: ${LIDIFY_DB_NAME}
+    volumes:
+      - lidify_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LIDIFY_DB_USER} -d ${LIDIFY_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Lidify Redis Cache
+  lidify-redis:
+    image: redis:7-alpine
+    container_name: lidify_redis
+    restart: unless-stopped
+    networks:
+      - media_net
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Lidify Backend API
+  lidify-backend:
+    build:
+      context: ./lidify/backend
+      dockerfile: Dockerfile
+    container_name: lidify_backend
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      DATABASE_URL: postgresql://${LIDIFY_DB_USER}:${LIDIFY_DB_PASSWORD}@lidify-postgres:5432/${LIDIFY_DB_NAME}
+      POSTGRES_USER: ${LIDIFY_DB_USER}
+      POSTGRES_PASSWORD: ${LIDIFY_DB_PASSWORD}
+      POSTGRES_DB: ${LIDIFY_DB_NAME}
+      REDIS_URL: redis://lidify-redis:6379
+      PORT: 3006
+      NODE_ENV: production
+      SESSION_SECRET: ${LIDIFY_SESSION_SECRET}
+      SETTINGS_ENCRYPTION_KEY: ${LIDIFY_SETTINGS_ENCRYPTION_KEY}
+      MUSIC_PATH: /music
+      TRANSCODE_CACHE_PATH: /app/cache/transcodes
+      TRANSCODE_CACHE_MAX_GB: 10
+      ALLOWED_ORIGINS: ${LIDIFY_ALLOWED_ORIGINS}
+      INTERNAL_API_SECRET: ${LIDIFY_INTERNAL_API_SECRET}
+      LIDIFY_CALLBACK_URL: http://lidify-backend:3006
+      PODCAST_DEBUG: 0
+    volumes:
+      - ./music:/music
+      - lidify_backend_cache:/app/cache
+      - lidify_backend_logs:/app/logs
+    ports:
+      - "3006:3006"
+    depends_on:
+      lidify-postgres:
+        condition: service_healthy
+      lidify-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Lidify Frontend UI
+  lidify-frontend:
+    build:
+      context: ./lidify/frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_BUILD_TYPE: nightly
+        NEXT_PUBLIC_BACKEND_URL: http://lidify-backend:3006
+    container_name: lidify_frontend
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_BACKEND_URL: http://lidify-backend:3006
+      NEXT_PUBLIC_API_URL: ""
+    ports:
+      - "3030:3030"
+    depends_on:
+      - lidify-backend
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Lidify Audio Analyzer (Essentia)
+  lidify-audio-analyzer:
+    build:
+      context: ./lidify/services/audio-analyzer
+    container_name: lidify_audio_analyzer
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      REDIS_URL: redis://lidify-redis:6379
+      DATABASE_URL: postgresql://${LIDIFY_DB_USER}:${LIDIFY_DB_PASSWORD}@lidify-postgres:5432/${LIDIFY_DB_NAME}
+      MUSIC_PATH: /music
+      BATCH_SIZE: 10
+      SLEEP_INTERVAL: 5
+      BRPOP_TIMEOUT: 30
+      MODEL_IDLE_TIMEOUT: 300
+      NUM_WORKERS: 2
+      THREADS_PER_WORKER: 1
+    volumes:
+      - ./music:/music:ro
+    depends_on:
+      lidify-postgres:
+        condition: service_healthy
+      lidify-redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: "4"
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python.*analyzer"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Lidify Audio Analyzer CLAP
+  lidify-audio-analyzer-clap:
+    build:
+      context: ./lidify/services/audio-analyzer-clap
+    container_name: lidify_audio_analyzer_clap
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      REDIS_URL: redis://lidify-redis:6379
+      DATABASE_URL: postgresql://${LIDIFY_DB_USER}:${LIDIFY_DB_PASSWORD}@lidify-postgres:5432/${LIDIFY_DB_NAME}
+      BACKEND_URL: http://lidify-backend:3006
+      MUSIC_PATH: /music
+      SLEEP_INTERVAL: 5
+      NUM_WORKERS: 2
+      THREADS_PER_WORKER: 1
+      MODEL_IDLE_TIMEOUT: 300
+      INTERNAL_API_SECRET: ${LIDIFY_INTERNAL_API_SECRET}
+    volumes:
+      - ./music:/music:ro
+    depends_on:
+      lidify-postgres:
+        condition: service_healthy
+      lidify-redis:
+        condition: service_healthy
+      lidify-backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: "4"
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python.*analyzer"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Lidify Prowlarr (Indexer Manager)
+  lidify-prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: lidify_prowlarr
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - lidify_prowlarr_config:/config
+    ports:
+      - "9697:9696"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Lidify qBittorrent (Music Torrents)
+  lidify-qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: lidify_qbittorrent
+    restart: unless-stopped
+    networks:
+      - media_net
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - WEBUI_PORT=8080
+    volumes:
+      - lidify_qbittorrent_config:/config
+      - ./music/torrents:/music/torrents
+      - ./downloads:/downloads
+    ports:
+      - "8084:8080"
+      - "6884:6881"
+      - "6884:6881/udp"
